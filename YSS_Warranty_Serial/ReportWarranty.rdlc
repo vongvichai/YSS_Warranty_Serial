@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2008/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <Body>
+    <ReportItems>
+      <Textbox Name="ITEMID">
+        <CanGrow>true</CanGrow>
+        <KeepTogether>true</KeepTogether>
+        <Paragraphs>
+          <Paragraph>
+            <TextRuns>
+              <TextRun>
+                <Value>=First(Fields!ITEMID.Value, "DataSet1")</Value>
+                <Style />
+              </TextRun>
+            </TextRuns>
+            <Style />
+          </Paragraph>
+        </Paragraphs>
+        <rd:DefaultName>ITEMID</rd:DefaultName>
+        <Top>3.59516cm</Top>
+        <Left>0.68474cm</Left>
+        <Height>0.6cm</Height>
+        <Width>6.97146cm</Width>
+        <Style>
+          <Border>
+            <Style>None</Style>
+          </Border>
+          <PaddingLeft>2pt</PaddingLeft>
+          <PaddingRight>2pt</PaddingRight>
+          <PaddingTop>2pt</PaddingTop>
+          <PaddingBottom>2pt</PaddingBottom>
+        </Style>
+      </Textbox>
+      <Textbox Name="MARKINGCODE1">
+        <CanGrow>true</CanGrow>
+        <KeepTogether>true</KeepTogether>
+        <Paragraphs>
+          <Paragraph>
+            <TextRuns>
+              <TextRun>
+                <Value>=First(Fields!MARKINGCODE1.Value, "DataSet1")</Value>
+                <Style />
+              </TextRun>
+            </TextRuns>
+            <Style />
+          </Paragraph>
+        </Paragraphs>
+        <rd:DefaultName>MARKINGCODE1</rd:DefaultName>
+        <Top>2.11349cm</Top>
+        <Left>0.68474cm</Left>
+        <Height>0.6cm</Height>
+        <Width>6.97146cm</Width>
+        <ZIndex>1</ZIndex>
+        <Style>
+          <Border>
+            <Style>None</Style>
+          </Border>
+          <PaddingLeft>2pt</PaddingLeft>
+          <PaddingRight>2pt</PaddingRight>
+          <PaddingTop>2pt</PaddingTop>
+          <PaddingBottom>2pt</PaddingBottom>
+        </Style>
+      </Textbox>
+      <Textbox Name="MARKINGCODE2">
+        <CanGrow>true</CanGrow>
+        <KeepTogether>true</KeepTogether>
+        <Paragraphs>
+          <Paragraph>
+            <TextRuns>
+              <TextRun>
+                <Value>=First(Fields!MARKINGCODE2.Value, "DataSet1")</Value>
+                <Style />
+              </TextRun>
+            </TextRuns>
+            <Style />
+          </Paragraph>
+        </Paragraphs>
+        <rd:DefaultName>MARKINGCODE2</rd:DefaultName>
+        <Top>2.58974cm</Top>
+        <Left>0.68474cm</Left>
+        <Height>0.6cm</Height>
+        <Width>6.97146cm</Width>
+        <ZIndex>2</ZIndex>
+        <Style>
+          <Border>
+            <Style>None</Style>
+          </Border>
+          <PaddingLeft>2pt</PaddingLeft>
+          <PaddingRight>2pt</PaddingRight>
+          <PaddingTop>2pt</PaddingTop>
+          <PaddingBottom>2pt</PaddingBottom>
+        </Style>
+      </Textbox>
+      <Image Name="Image1">
+        <Source>External</Source>
+        <Value>="file:///D:/QRcode/" + First(Fields!MARKINGCODE1.Value, "DataSet1") + ".png"</Value>
+        <Sizing>FitProportional</Sizing>
+        <Top>2.11349cm</Top>
+        <Left>11.87662cm</Left>
+        <Height>3.0875cm</Height>
+        <Width>3.14042cm</Width>
+        <ZIndex>3</ZIndex>
+        <Style>
+          <Border>
+            <Style>None</Style>
+          </Border>
+        </Style>
+      </Image>
+    </ReportItems>
+    <Height>3.96875in</Height>
+    <Style />
+  </Body>
+  <Width>7.25in</Width>
+  <Page>
+    <PageHeight>29.7cm</PageHeight>
+    <PageWidth>21cm</PageWidth>
+    <LeftMargin>2cm</LeftMargin>
+    <RightMargin>2cm</RightMargin>
+    <TopMargin>2cm</TopMargin>
+    <BottomMargin>2cm</BottomMargin>
+    <ColumnSpacing>0.13cm</ColumnSpacing>
+    <Style />
+  </Page>
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="YSS_DBLINKDataSet">
+      <ConnectionProperties>
+        <DataProvider>System.Data.DataSet</DataProvider>
+        <ConnectString>/* Local Connection */</ConnectString>
+      </ConnectionProperties>
+      <rd:DataSourceID>55fcd085-fdf8-46a7-99e1-663a622b1b84</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="DataSet1">
+      <Query>
+        <DataSourceName>YSS_DBLINKDataSet</DataSourceName>
+        <CommandText>/* Local Query */</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="ITEMID">
+          <DataField>ITEMID</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="MARKINGCODE1">
+          <DataField>MARKINGCODE1</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="MARKINGCODE2">
+          <DataField>MARKINGCODE2</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="DEPARTMENT">
+          <DataField>DEPARTMENT</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="UNIT">
+          <DataField>UNIT</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+      <rd:DataSetInfo>
+        <rd:DataSetName>YSS_DBLINKDataSet</rd:DataSetName>
+        <rd:SchemaPath>C:\Users\Tawat\documents\visual studio 2013\Projects\YSS_Warranty_Serial\YSS_Warranty_Serial\YSS_DBLINKDataSet.xsd</rd:SchemaPath>
+        <rd:TableName>YSS_WARRANTY_SERIAL</rd:TableName>
+        <rd:TableAdapterFillMethod>Fill</rd:TableAdapterFillMethod>
+        <rd:TableAdapterGetDataMethod>GetData</rd:TableAdapterGetDataMethod>
+        <rd:TableAdapterName>YSS_WARRANTY_SERIALTableAdapter</rd:TableAdapterName>
+      </rd:DataSetInfo>
+    </DataSet>
+  </DataSets>
+  <ReportParameters>
+    <ReportParameter Name="PUrl">
+      <DataType>String</DataType>
+      <Prompt>ReportParameter1</Prompt>
+    </ReportParameter>
+  </ReportParameters>
+  <EmbeddedImages>
+    <EmbeddedImage Name="ID123456">
+      <MIMEType>image/png</MIMEType>
+      <ImageData>iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAARaSURBVHhe7dBBjiQ3DETRuf+l24A+Fx8mpBbFHC8MvlUgKGWx9OdnXJvHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKpjHKug+1p9rcUHck+HG2egR1YW48Kp9/1pcEPdkuHE2ekR1IS68at+/WMJndhk05p4MN847N2d+1b5/sYTP7DJozD0Zbpx3bs78qn1fS5DNPXmHM4hqceNs7snmnvysfV9LkM09eYcziGpx42zuyeae/Kx9X0uQzb2zuXfO8tSNs7knP2vf1xJkc+9s7p2zPHXjbO7Jz9r3tQTZ3JORm3vchRtnc09+1r6vJcjmnozc3OMu3Dibe/Kz9v2LJXyGjF2DqBY3ZNv1dnPmV+37F0v4DBm7BlEtbsi26+3mzK/a96/5/N/INzj/rH3/ms//jXyD88+699/E7hKDJSpxn/N/Zh6roPt7LL1zPuMp2egtBktUi5tzbup+hVV2zmc8JRu9xWCJanFzzk3ffOWN/wbZ6BFVW3zu1TxWQft+WoIGbs4ZNBaDZdfAjTNomrpfyavQwM05g8ZisOwauHEGTdNHXxE3ZNAgKonBctPYbkqP3Dzo3gerwA0ZNIhKYrDcNLab0iM3D9r3tQQZNNg1cOOceXqTQfOJ7re8EBk02DVw45x5epNB84kvv4XPV/wXvn/mkzk/m8cqaN8/8pldNnpEtbg5Z+TmE90vstaOz+yy0SOqxc05Izef6H7xvFaevjU493BDRm4etO8fl8jTtwbnHm7IyM2D7n3kVdzsMnID+izGR3F0ieoL33wrr+Vml5Eb0GcxPoqjS1Rf6H7LC5GNHlEluyk93JDhJmfb9SXt+1qCbPSIKtlN6eGGDDc5264vad/XEueMXYOo
+xD15x2fIoPlE91te6JyxaxCVuCfv+AwZNJ/ofuu8kKc5Y9fs5DM0cENGbh607x+X8DRn7JqdfIYGbsjIzYP2fS1BRm7gngw35IwporoQF77Q/ZYXIiM3cE+GG3LGFFFdiAtf+PJbN+IfLFEVxeUlKqn2JfNYBe37127OcwZRLbmBe2ej/0T3W7HRhZvznEFUS27g3tnoP9H91s1C+YwbZ9AgqiUqiYHkPjfPul+5WSWfceMMGkS1RCUxkNzn5ln3K16FbO53GTQWA4nBEtWGz5A/0f2WFyKb+10GjcVAYrBEteEz5E90v+WFyOY+Z6O3GIh754xpFuNX7ftagmzuczZ6i4G4d86YZjF+1b6vJcjm3tnoEVUS4yTGSZ7SNHW/4lXI5t7Z6BFVEuMkxkme0jR1v3Kzis+cM24a8/Scm7pfuVnFZ84ZN415es5N3a+wyg2fr+aMaeap8ye632KhGz5fzRnTzFPnT3z5rf+9eayCeayCeayCeayCeayCeayCeayCeayCeayCeayCeayCeayCeayCeayCeayCeayCeayCeayCeayCeaxrPz//ABlsuI2t+Y9oAAAAAElFTkSuQmCC</ImageData>
+    </EmbeddedImage>
+    <EmbeddedImage Name="C04900405">
+      <MIMEType>image/png</MIMEType>
+      <ImageData>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</ImageData>
+    </EmbeddedImage>
+  </EmbeddedImages>
+  <rd:ReportUnitType>Cm</rd:ReportUnitType>
+  <rd:ReportID>c605257a-956d-4399-80f5-71f113abc735</rd:ReportID>
+</Report>
