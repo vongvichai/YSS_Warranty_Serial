@@ -1,0 +1,41 @@
+Jan-21 08:30:05.860: Connected.
+Jan-21 08:30:16.126: Disconnected.
+Jan-21 08:32:05.683: Connected.
+Jan-21 08:32:10.952: Disconnected.
+Jan-21 08:33:31.840: Connected.
+Jan-21 08:33:36.229: Disconnected.
+Jan-21 08:40:11.285: Connected.
+Jan-21 08:40:18.687: Initial=>WX,ProgramNo=0105
+Jan-21 08:40:18.701: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1203052,BLK=002,CharacterString=MK302-240TL-08-858,BLK=003,CharacterString=,BLK=004,CharacterString=,BLK=011,CharacterString=B1203053,BLK=012,CharacterString=MK302-240TL-08-858,BLK=013,CharacterString=,BLK=014,CharacterString=
+Jan-21 08:40:18.713: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=1,1111111111
+Jan-21 08:40:18.731: OneOrTwoSide=>WX,StartMarking
+Jan-21 08:40:18.754: Marked=>WX,Print Warranty Card
+Jan-21 08:46:19.066: Initial=>WX,ProgramNo=0105
+Jan-21 08:46:19.075: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1203054,BLK=002,CharacterString=MK302-240TL-08-858,BLK=003,CharacterString=,BLK=004,CharacterString=
+Jan-21 08:46:19.086: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=0,11111
+Jan-21 08:46:19.103: OneOrTwoSide=>WX,StartMarking
+Jan-21 08:46:19.125: Marked=>WX,Print Warranty Card
+Jan-21 09:28:05.675: Disconnected.
+Jan-21 10:48:03.880: Connected.
+Jan-21 10:48:28.055: Disconnected.
+Jan-21 10:48:32.192: Connected.
+Jan-21 10:51:44.226: Initial=>WX,ProgramNo=0105
+Jan-21 10:51:44.237: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1302129,BLK=002,CharacterString=OK302-360T-02-858,BLK=003,CharacterString=,BLK=004,CharacterString=,BLK=011,CharacterString=B1302130,BLK=012,CharacterString=OK302-360T-02-858,BLK=013,CharacterString=,BLK=014,CharacterString=
+Jan-21 10:51:44.248: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=1,1111111111
+Jan-21 10:51:44.264: OneOrTwoSide=>WX,StartMarking
+Jan-21 10:51:44.297: Marked=>WX,Print Warranty Card
+Jan-21 10:51:51.956: Initial=>WX,ProgramNo=0105
+Jan-21 10:51:51.964: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1302131,BLK=002,CharacterString=OK302-360T-02-858,BLK=003,CharacterString=,BLK=004,CharacterString=,BLK=011,CharacterString=B1302132,BLK=012,CharacterString=OK302-360T-02-858,BLK=013,CharacterString=,BLK=014,CharacterString=
+Jan-21 10:51:51.974: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=1,1111111111
+Jan-21 10:51:51.985: OneOrTwoSide=>WX,StartMarking
+Jan-21 10:51:52.006: Marked=>WX,Print Warranty Card
+Jan-21 10:52:03.162: Initial=>WX,ProgramNo=0105
+Jan-21 10:52:03.173: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1302133,BLK=002,CharacterString=OK302-360T-02-858,BLK=003,CharacterString=,BLK=004,CharacterString=
+Jan-21 10:52:03.185: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=0,11111
+Jan-21 10:52:03.194: OneOrTwoSide=>WX,StartMarking
+Jan-21 10:52:03.219: Marked=>WX,Print Warranty Card
+Jan-21 10:52:05.146: Initial=>WX,ProgramNo=0105
+Jan-21 10:52:05.154: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1302134,BLK=002,CharacterString=OK302-360T-02-858,BLK=003,CharacterString=,BLK=004,CharacterString=,BLK=011,CharacterString=B1302135,BLK=012,CharacterString=OK302-360T-02-858,BLK=013,CharacterString=,BLK=014,CharacterString=
+Jan-21 10:52:05.162: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=1,1111111111
+Jan-21 10:52:05.171: OneOrTwoSide=>WX,StartMarking
+Jan-21 10:52:05.191: Marked=>WX,Print Warranty Card

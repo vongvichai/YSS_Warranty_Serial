@@ -1,0 +1,37 @@
+Jan-19 02:28:29.207: Connected.
+Jan-19 02:28:37.701: Disconnected.
+Jan-19 02:29:24.749: Connected.
+Jan-19 02:29:32.228: Initial=>WX,ProgramNo=0105
+Jan-19 02:29:32.238: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1202912,BLK=002,CharacterString=RE302-350T-22-88,BLK=003,CharacterString=811,BLK=004,CharacterString=,BLK=011,CharacterString=B1202913,BLK=012,CharacterString=RE302-350T-22-88,BLK=013,CharacterString=811,BLK=014,CharacterString=
+Jan-19 02:29:32.246: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=1,1111111111
+Jan-19 02:29:32.254: OneOrTwoSide=>WX,StartMarking
+Jan-19 02:29:32.283: Marked=>WX,Print Warranty Card
+Jan-19 02:29:36.455: Initial=>WX,ProgramNo=0105
+Jan-19 02:29:36.462: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1202914,BLK=002,CharacterString=RE302-350T-22-88,BLK=003,CharacterString=811,BLK=004,CharacterString=
+Jan-19 02:29:36.471: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=0,11111
+Jan-19 02:29:36.480: OneOrTwoSide=>WX,StartMarking
+Jan-19 02:29:36.501: Marked=>WX,Print Warranty Card
+Jan-19 02:29:37.213: Initial=>WX,ProgramNo=0105
+Jan-19 02:29:37.222: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1202915,BLK=002,CharacterString=RE302-350T-22-88,BLK=003,CharacterString=811,BLK=004,CharacterString=,BLK=011,CharacterString=B1202916,BLK=012,CharacterString=RE302-350T-22-88,BLK=013,CharacterString=811,BLK=014,CharacterString=
+Jan-19 02:29:37.230: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=1,1111111111
+Jan-19 02:29:37.238: OneOrTwoSide=>WX,StartMarking
+Jan-19 02:29:37.260: Marked=>WX,Print Warranty Card
+Jan-19 02:29:39.866: Initial=>WX,ProgramNo=0105
+Jan-19 02:29:39.877: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1202917,BLK=002,CharacterString=RE302-350T-22-88,BLK=003,CharacterString=811,BLK=004,CharacterString=,BLK=011,CharacterString=B1202918,BLK=012,CharacterString=RE302-350T-22-88,BLK=013,CharacterString=811,BLK=014,CharacterString=
+Jan-19 02:29:39.886: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=1,1111111111
+Jan-19 02:29:39.896: OneOrTwoSide=>WX,StartMarking
+Jan-19 02:29:39.919: Marked=>WX,Print Warranty Card
+Jan-19 02:29:40.475: Initial=>WX,ProgramNo=0105
+Jan-19 02:29:40.481: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1202919,BLK=002,CharacterString=RE302-350T-22-88,BLK=003,CharacterString=811,BLK=004,CharacterString=,BLK=011,CharacterString=B1202920,BLK=012,CharacterString=RE302-350T-22-88,BLK=013,CharacterString=811,BLK=014,CharacterString=
+Jan-19 02:29:40.489: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=1,1111111111
+Jan-19 02:29:40.497: OneOrTwoSide=>WX,StartMarking
+Jan-19 02:29:40.521: Marked=>WX,Print Warranty Card
+Jan-19 02:29:41.139: Initial=>WX,ProgramNo=0105
+Jan-19 02:29:41.147: Programmed=>WX,PRG=0105,BLK=001,CharacterString=B1202921,BLK=002,CharacterString=RE302-350T-22-88,BLK=003,CharacterString=811,BLK=004,CharacterString=
+Jan-19 02:29:41.155: Blocked=>WX,PRG=0105,BLK=000,MarkingEnable=0,11111
+Jan-19 02:29:41.163: OneOrTwoSide=>WX,StartMarking
+Jan-19 02:29:41.178: Marked=>WX,Print Warranty Card
+Jan-19 02:29:43.338: Disconnected.
+Jan-19 03:38:10.748: Connected.
+Jan-19 03:38:26.627: Disconnected.
+Jan-19 03:38:32.190: Connected.
