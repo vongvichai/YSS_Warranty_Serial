@@ -6,22 +6,27 @@ using System.Globalization;
 using System.Text;
 using System.Windows.Forms;
 using SimpleTcp;
-
+using ZXing;
 using System.IO;
-
-using iTextSharp;
-using iTextSharp.text;
-using iTextSharp.text.pdf;
-using Rectangle = System.Drawing.Rectangle;
+using System.Linq;
+using System.Collections.Generic;
+using Microsoft.Reporting.WinForms;
+using System.Dynamic;
+using MaterialSkin;
+using MaterialSkin.Controls;
+using System.Diagnostics;
 
 namespace WarranteeForm
 {
-    public partial class Form1 : Form
+    public partial class Form1 : MaterialForm
     {
         SimpleTcpClient client;
         string connString = Properties.Settings.Default.ConnectionString;
         string department_id = Properties.Settings.Default.Department;
-        int markedIndex = -1;
+        string departments = Properties.Settings.Default.Departments;
+        string image_path = Properties.Settings.Default.ImagePath;
+        string WarrantyPdfFile = "";
+        const string WarrantyCardsPath = "WarrantyCards";
         enum State
         {
             StandBy,
@@ -38,6 +43,10 @@ namespace WarranteeForm
         public Form1()
         {
             InitializeComponent();
+            var materialSkinManager = MaterialSkinManager.Instance;
+            materialSkinManager.AddFormToManage(this);
+            materialSkinManager.Theme = MaterialSkinManager.Themes.LIGHT;
+            materialSkinManager.ColorScheme = new ColorScheme(Primary.Amber800, Primary.Amber900, Primary.Amber500, Accent.LightBlue200, TextShade.WHITE);
         }
         #region Functions
         /*
@@ -56,7 +65,33 @@ namespace WarranteeForm
          * 11. InsertPrintedAt
          * 12. Update Warranty Card
          * * */
-        private void GetDepartments(string departments)
+        
+        private SqlConnection g_conn;
+        private SqlTransaction g_trans;
+        private IEnumerator<Button> Procedures;
+        private IEnumerator<string> Cmds;
+        
+        private bool ConnectMarkingMachine()
+        {
+            client = new SimpleTcpClient(tbHost.Text, int.Parse(tbPort.Text));
+            client.Events.Connected += Connected;
+            client.Events.Disconnected += Disconnected;
+            client.Events.DataReceived += DataReceived;
+            try
+            {
+                client.Connect();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                client.Events.Connected -= Connected;
+                client.Events.Disconnected -= Disconnected;
+                client.Events.DataReceived -= DataReceived;
+                MessageBox.Show(ex.Message, "ไม่สามารถติดต่อกับเครื่อง Marking ได้", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            return false;
+        }
+        private void GetDepartments()
         {
             using (SqlConnection conn = new SqlConnection(connString))
             {
@@ -67,13 +102,13 @@ namespace WarranteeForm
                 sqlCmd.CommandText = $@"
                     Select DEPARTMENTID, DESCRIPTION From YSS_DEPARTMENT
                     Where DEPARTMENTID IN ({departments})";
-                SqlDataAdapter sqlDataAdap = new SqlDataAdapter(sqlCmd);
+                SqlDataAdapter da = new SqlDataAdapter(sqlCmd);
 
                 DataTable dt = new DataTable
                 {
                     Locale = CultureInfo.InvariantCulture
                 };
-                sqlDataAdap.Fill(dt);
+                da.Fill(dt);
                 cbDepartment.DataSource = dt;
                 cbDepartment.DisplayMember = "DESCRIPTION";
                 cbDepartment.ValueMember = "DEPARTMENTID";
@@ -88,235 +123,337 @@ namespace WarranteeForm
                 sqlCmd.Connection = conn;
                 sqlCmd.CommandType = CommandType.Text;
                 sqlCmd.CommandText = $@"
-                    Select t1.ID, t1.PRODID, t1.ITEMID, t1.ITEMNAME, t1.QTY, t1.UNITID
+                    Select distinct t1.ID, t1.PRODID, t1.ITEMID, t1.ITEMNAME, t1.QTY, t1.UNITID
                         , convert(varchar(5),t1.STARTDATE,3) + ' ' + convert(varchar,t1.STARTTIME,24) as STARTED
-	                    , t3.KBA_Use , ( SELECT KBANumber FROM YSS_PRODUCT_ABE WHERE t3.KBA_Use = 'YES' AND LEFT(t1.ITEMID,6) LIKE '%' + Condition + '%') as KBANumber
-                        , t1.INVENTSTLYEID , t1.DEPARTMENT, t1.ITEMSEARCHNAME
+                        , t3.KBA_Use , ( SELECT KBANumber FROM YSS_PRODUCT_ABE WHERE t3.KBA_Use = 'YES' AND LEFT(t1.ITEMID,6) LIKE '%' + Condition + '%') as KBANumber
+                        , t1.INVENTSTLYEID , t1.DEPARTMENT, t1.ITEMSEARCHNAME, t1.STARTDATE, t1.STARTTIME
+                        , t4.YSSACTIVEABE
+                        , t5.INVOICEADDRESSCOUNTRYREGIONID
+                        , t6.region
                     From YSS_PRODTABLE t1
                         LEFT JOIN YSS_PROD_JOBCARD t2 on t1.id = t2.prod_id
-	                    LEFT JOIN YSS_PRODUCT_ABE_TRANS t3 ON t1.InventStlyeId = t3.DistributorCode
+                        LEFT JOIN YSS_PRODUCT_ABE_TRANS t3 ON t1.InventStlyeId = t3.DistributorCode
+                        LEFT JOIN [YSS_BYOD]..[YSSProductDetailStaging] t4 on t1.ITEMID = t4.ITEMID collate Thai_CI_AS
+                        LEFT JOIN [YSS_BYOD]..[CustCustomerV3Staging] t5 on t5.DEFAULTINVENTORYSTATUSID collate Thai_CI_AS = t1.InventStlyeId and t1.InventStlyeId <> '0000' 
+                        LEFT JOIN [YSS_DBLINK]..[YSS_REGION_COUNTRY] t6 on t6.[alpha-3] collate Thai_CI_AS = t5.INVOICEADDRESSCOUNTRYREGIONID
                     Where t1.MARKINGCODE IS NOT NULL 
-                        AND t1.PRODSTATUS = 'Started' 
-                        AND t2.ID IS NOT NULL  
-                        AND isnull(T2.ToTime,'') <> ''
-                        AND t1.DEPARTMENT = '{departmentid}'
-                    ORDER BY t1.STARTDATE, t1.STARTTIME";
-                SqlDataAdapter sqlDataAdap = new SqlDataAdapter(sqlCmd);
+                        --AND t1.PRODSTATUS = 'Started' 
+                        --AND t1.WaitEndPD = 0
+                        --AND t2.ID IS NOT NULL  
+                        --AND isnull(T2.ToTime,'') <> ''
+                        --AND t1.DEPARTMENT = '{departmentid}'
+                        AND t1.PRODID in ('PD20057350','PD20021516','PD21035816','PD20012095','PD20027383','PD20040577'
+                                        ,'PD21038039','PD20048540','PD20012145','PD20012999','PD20014117')
+
+                    ORDER BY t1.PRODID, t1.STARTDATE, t1.STARTTIME";
+                SqlDataAdapter da = new SqlDataAdapter(sqlCmd);
                 BindingSource bs = new BindingSource();
                 DataTable dt = new DataTable
                 {
                     Locale = CultureInfo.InvariantCulture
                 };
-                sqlDataAdap.Fill(dt);
+                da.Fill(dt);
                 bs.DataSource = dt.DefaultView;
-                dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-                dataGridView1.DataSource = bs;
-            }                
-        }
-        private void GetProductionOrder()
-        {
-            if (dataGridView1.RowCount > 0)
-            {
-                markedIndex = -1;
-                string prodid = dataGridView1.CurrentRow.Cells["PRODID"].Value.ToString();
-                using (SqlConnection conn = new SqlConnection(connString))
-                {
-                    conn.Open();
-                    SqlCommand sqlCmd = new SqlCommand();
-                    sqlCmd.Connection = conn;
-                    sqlCmd.CommandType = CommandType.Text;
-                    sqlCmd.CommandText = $@"
-                        Select t1.ID, t1.MARKINGCODE, convert(varchar,t2.FINISHED_AT,20) AS FINISHED_AT, t3.RUNNUMBER
-                            , convert(varchar,t3.PRINTED_AT,20) AS PRINTED_AT
-                        From YSS_MARKINGCODE t1
-                           Left Join YSS_MARKING_FINISHED t2 ON t1.ID = t2.MARKINGCODE_ID
-                           Left Join YSS_WARRANTY_CARD t3 ON t3.ID = t2.WARRANTY_CARD_ID
-                        Where PRODID = '{ prodid }'
-                        ORDER BY t1.MARKINGCODE";
-                    SqlDataAdapter sqlDataAdap = new SqlDataAdapter(sqlCmd);
-
-                    DataTable dt = new DataTable();
-                    sqlDataAdap.Fill(dt);
-                    dataGridView2.DataSource = dt.DefaultView;
-                }
-                dataGridView2.ClearSelection();
+                cbx_production_order.DisplayMember = "PRODID";
+                cbx_production_order.ValueMember = "PRODID";
+                cbx_production_order.DataSource = bs;
             }
         }
-        private void ShowItemDetails()
+        private dynamic GetProductionOrder(string prod_id)
         {
-            var dvr = dataGridView1.CurrentRow as DataGridViewRow;
-            var distributor = dvr.Cells["INVENTSTLYEID"].Value.ToString();
-            var kbaNumber = dvr.Cells["KBANUMBER"].Value.ToString();
-            txProdId.Text = dvr.Cells["PRODID"].Value.ToString();
-            txItemId.Text = dvr.Cells["ITEMID"].Value.ToString();
-            txItemName.Text = dvr.Cells["ITEMNAME"].Value.ToString();
-            txItemSearchName.Text = dvr.Cells["ITEMSEARCHNAME"].Value.ToString();
-            txQty.Text = dvr.Cells["QTY"].Value.ToString();
-            txUnitId.Text = dvr.Cells["UNITID"].Value.ToString();
-            txInventStyleId.Text = distributor.Contains("0000") ? "":distributor;
-            txKBANumber.Text = distributor.Contains("0000") ? "":kbaNumber;
-            cbSetLeft.Text = cbSetRight.Text = "";
-            cbSetLeft.Checked = cbSetRight.Checked = false;
-            var rows = dataGridView2.SelectedRows;
-            cbSetLeft.Enabled = false;
-            cbSetRight.Enabled = txUnitId.Text.Contains("PCS");
-            if (dataGridView2.SelectedRows.Count == 2)
+            BindingSource bs = cbx_production_order.DataSource as BindingSource;
+            bs.Position = bs.Find("PRODID", prod_id);
+            DataRowView dr = bs.Current as DataRowView;
+            dynamic order = new ExpandoObject();
+            order.prodId = prod_id;
+            order.distributor = dr["INVENTSTLYEID"].ToString().Trim();
+            order.kbaNumber = dr["KBANUMBER"].ToString().Trim();
+            order.kbaActive = dr["YSSACTIVEABE"].ToString();
+            order.itemId = dr["ITEMID"].ToString().Trim();
+            order.itemName = dr["ITEMNAME"].ToString().Trim();
+            order.unitId = dr["UNITID"].ToString().Trim();
+            order.inventStyleId = order.distributor.Contains("0000") ? "" : order.distributor;
+            order.kbaNumber = order.distributor.Contains("0000") || order.kbaActive == "0" ? "" : order.kbaNumber;
+            order.kbaUse = dr["KBA_USE"].ToString() == "YES" ? true : false;
+            //
+            order.qty = dr["QTY"].ToString();
+            order.activeAbe = dr["YSSACTIVEABE"].ToString() == "1";
+            order.region = dr["region"].ToString().Trim();
+            return order;
+        }
+        private void ShowProductionInfo(dynamic order)
+        {
+            txItemId.Text = order.itemId;
+            txItemName.Text = order.itemName;
+            txUnitId.Text = order.unitId;
+            txInventStyleId.Text = order.inventStyleId;
+            txKBANumber.Text = order.kbaNumber;
+            cbx_kba_use.Checked = order.kbaUse;
+            //
+            pictureBox1.LoadAsync(image_path + txItemId.Text + ".jpg");
+        }
+        private dynamic GetMarkingInfo(dynamic order) 
+        {
+            DataTable dtSerials = GetSerials(order.prodId);
+            order.serialFrom = dtSerials.AsEnumerable().Min(r => r.Field<string>("MARKINGCODE"));
+            order.serialTo = dtSerials.AsEnumerable().Max(r => r.Field<string>("MARKINGCODE"));
+            order.marked = dtSerials.AsEnumerable().Count(r => r.Field<DateTime?>("FINISHED_AT").HasValue);
+
+            tbx_left_serial.Text = tbx_right_serial.Text = string.Empty;
+            tbx_left_serial.Tag = tbx_right_serial.Tag = string.Empty;
+            if (order.marked < Int16.Parse(order.qty) )
             {
-                cbSetLeft.Text = rows[1].Cells["MARKINGCODE"].Value.ToString();
-                cbSetRight.Text = rows[0].Cells["MARKINGCODE"].Value.ToString();
-                cbSetLeft.Checked = cbSetRight.Checked = true;
+                int count = order.unitId == "PAIR" ? 2:1;
+                var tbxs = new List<TextBox>() { tbx_left_serial, tbx_right_serial };
+                var markSerials = GetMarkSerials(dtSerials, g_conn, g_trans, count);
+                foreach (var item in markSerials.Select((value, i) => new { i, value }))
+                {
+                    string[] values = item.value.Split(',');
+                    tbxs[item.i].Text = values[1];
+                    tbxs[item.i].Tag = values[0];
+                }
+            }
+            return order;
+        }
+        private void ShowMarkingInfo(dynamic order) 
+        { 
+            tbx_serial_from.Text = order.serialFrom;
+            tbx_serial_to.Text = order.serialTo;
+            txQty.Text = $"{order.marked}/{order.qty}";
+            cbx_abe_active.Checked = order.activeAbe;
+            tbx_region.Text = order.region;
+        }
+        private void GetPatternCode(string prodid, string itemId)
+        {
+            //itemId = "MO302-300T-66-858";
+            DataTable dt = new DataTable { Locale=CultureInfo.InvariantCulture };
+            var sql = $@"
+               select distinct top 1 t1.ITEMID fg_item_id, t4.item_id, t4.product_series, t4.unit_id, t4.part_type, t4.pattern_code, t5.InventSizeId, t1.TXTPRODUCTION
+                from [YSS_DBLINK]..YSS_VIEW_PRODUCT_SERIES t1
+                    join [YSS_BYOD].[dbo].[BOMBillOfMaterialsVersionV3Staging] t2 on t2.MANUFACTUREDITEMNUMBER = t1.ITEMID
+                    join [YSS_BYOD].[dbo].[BOMBillOfMaterialsLineV3Staging] t3 on t3.BOMID = t2.BOMID
+                    join [YSS_DBLINK]..YSS_LASER_PATTERN t4 on t4.item_id = t3.ITEMNUMBER collate Thai_CI_AS
+                        and t4.unit_id = t1.BOMUNITID collate Thai_CI_AS
+                        and t4.product_series = t1.SERIES
+                        and t4.TxtProduction = t1.Txtproduction
+                    join [YSS_DBLINK]..YSS_PRODTABLE t5 on t5.ITEMID = t1.ITEMID collate Thai_CI_AS
+                where t1.itemid = '{itemId}'
+                    and t5.PRODID = '{prodid}'
+                    and not (t5.InventSizeId = 'R50' and t4.part_type = 'RESERVOIR') --Except Japan Edition
+                order by t4.part_type";
+            using (var conn = new SqlConnection(connString))
+            {
+                conn.Open();
+                var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                var da = new SqlDataAdapter(cmd);
+                da.Fill(dt);
+            }
+            if (dt.Rows.Count > 0)
+            {
+                dt.AsEnumerable().ToList().ForEach(r =>
+                {
+                    tbx_pattern_code.Text = r.Field<string>("pattern_code");
+                    tbx_pattern_code.BackColor = Color.Yellow;
+                });
             }
             else
             {
-                cbSetLeft.Text = rows[0].Cells["MARKINGCODE"].Value.ToString();
-                cbSetLeft.Checked = true;
+                ToggleButton(false);
+                MessageBox.Show("ไม่พบ Pattern Code ของรหัส " + txItemId.Text, "ค้นหา Pattern Code ผิดพลาด:", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-        private void GetMarkingData(string item_number)
+        private IEnumerator<Button> CreateProcedures()
         {
-            // Table design
+            var procedures = new List<Button>();
+            if (tbx_pattern_code.Text != "N.A.")
+                procedures.Add(btnMark);
+            procedures.Add(btnPrint);
+            foreach(var btn in procedures)
+                yield return btn;
         }
-        private void SelectUnmarkSerial(DataGridView dgv)
+        private DataTable GetSerials(string prod_id)
         {
-            if (markedIndex == -1)
+            DataTable dt = new DataTable { Locale=CultureInfo.InvariantCulture };
+            var sql = $@"Select t1.ID, t1.MARKINGCODE, t2.FINISHED_AT
+                From YSS_MARKINGCODE t1
+                    Left Join YSS_MARKING_FINISHED t2 ON t1.ID = t2.MARKINGCODE_ID
+                Where PRODID = '{prod_id}'
+                ORDER BY t1.MARKINGCODE";
+            using (var conn = new SqlConnection(connString))
             {
-                dgv.ClearSelection();
-                foreach (DataGridViewRow row in dgv.Rows)
+                conn.Open();
+                var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                SqlDataAdapter da = new SqlDataAdapter(cmd);
+                da.Fill(dt);
+            }
+            return dt;
+        }
+        private List<string> GetMarkSerials(DataTable dt, SqlConnection conn, SqlTransaction trans, int count)
+        {
+            List<string> serials = new List<string>();
+            EnumerableRowCollection<DataRow> rows = dt.AsEnumerable();
+            var markingCodes = rows
+                .Where(r=> r.Field<DateTime?>("FINISHED_AT").HasValue == false)
+                .Select(r =>
+                    new {
+                        id = r.Field<Int64>("ID"),
+                        markingCode = r.Field<string>("MARKINGCODE")
+                    }).ToList();
+
+            var cmd = g_conn.CreateCommand();
+            cmd.Transaction = g_trans;
+            cmd.CommandText = "select @@TRANCOUNT";
+            var trancount = Convert.ToInt32(cmd.ExecuteScalar());
+            if (trancount > 0)
+                g_trans.Commit();
+            
+            g_trans = g_conn.BeginTransaction();
+            cmd = g_conn.CreateCommand();
+            cmd.Transaction = g_trans;
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandText = "sp_getapplock";
+            cmd.Parameters.Add(new SqlParameter("@LockMode", "Exclusive"));
+            cmd.Parameters.Add(new SqlParameter("@Resource", "?"));
+            foreach( var item in markingCodes) 
+            {
+                cmd.Parameters["@Resource"].Value = item.markingCode;
+                if (isAppLock(item.markingCode, g_conn, g_trans) == false)
                 {
-                    if (row.Cells["FINISHED_AT"].Value.ToString().Equals(String.Empty))
+                    Convert.ToInt32(cmd.ExecuteScalar());
+                    serials.Add($"{item.id},{item.markingCode}");
+                }
+                if (serials.Count == count) break;
+            };
+            return serials;
+        }
+        private bool isAppLock(string resource, SqlConnection conn, SqlTransaction trans)
+        {
+            var cmd = conn.CreateCommand();
+            cmd.Transaction = trans;
+            cmd.CommandText = $@"select count(*) 
+                from sys.dm_tran_locks
+                where resource_type = 'APPLICATION'
+                    AND request_mode = 'X'
+                    AND request_status = 'GRANT'
+                    AND resource_description LIKE '%:\[{resource}\]:%' ESCAPE '\'";
+            return (Convert.ToInt32(cmd.ExecuteScalar()) > 0);
+        }
+        private void releaseAppLock(string resource, SqlConnection conn)
+        {
+            var cmd = conn.CreateCommand();
+            cmd.Transaction = g_trans;
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandText = "sp_releaseapplock";
+            cmd.Parameters.AddWithValue("@Resource", resource);
+            cmd.ExecuteNonQuery();
+        }
+        private void Marking()
+        {
+            markingState = State.Initial;
+            CollectMarkingData(txUnitId.Text);
+            SendMarkingData();
+            WarrantyPdfFile = $@"{tbx_left_serial.Text}{(string.IsNullOrEmpty(tbx_right_serial.Text) ? "" : "-" + tbx_right_serial.Text)}.PDF";
+        }
+        private void CollectMarkingData(string unitId)
+        {
+            string blocks = $"BLK=0001,CharacterString={tbx_left_serial.Text}";         //serial
+            if (txInventStyleId.TextLength > 0) //Export
+            {
+                blocks += $",BLK=0002,CharacterString={txInventStyleId.Text.Trim()}";   //distributor code
+                if (cbx_kba_use.Checked)
+                {
+                    blocks += $",BLK=0003,CharacterString={txItemId.Text}";             //item code
+                    blocks += $",BLK=0004,CharacterString={txKBANumber.Text}";          //kba
+                }
+            }
+            if (unitId == "PAIR")
+            {
+                blocks += $"BLK=0011,CharacterString={tbx_right_serial.Text}";      //serial
+                if (txInventStyleId.TextLength > 0) //Export
+                {
+                    blocks += $",BLK=0012,CharacterString={txInventStyleId.Text.Trim()}";//distributor code
+                    if (cbx_kba_use.Checked)
                     {
-                        markedIndex = row.Index;
-                        row.Selected = true;
-                        dgv.CurrentCell = row.Cells[0];
-                        if (markedIndex + 1 < dgv.Rows.Count)
-                        {
-                            dgv.Rows[++markedIndex].Selected = true;
-                        }
-                        break;
+                        blocks += $",BLK=0013,CharacterString={txItemId.Text}";         //item code
+                        blocks += $",BLK=0014,CharacterString={txKBANumber.Text}";      //kba
                     }
                 }
-            } else
-            {
-                if (markedIndex + 1 < dgv.Rows.Count)
-                {
-                    dgv.Rows[++markedIndex].Selected = true;
-                    dgv.CurrentCell = dgv.Rows[markedIndex].Cells[0];
-                    if (markedIndex + 1 < dgv.Rows.Count)
-                    {
-                        dgv.Rows[++markedIndex].Selected = true;
-                    }
-                } 
             }
-        }
-        private bool ConnectMarkingMachine()
-        {
-            client = new SimpleTcpClient(tbHost.Text,int.Parse(tbPort.Text));
-            client.Events.Connected += Connected;
-            client.Events.Disconnected += Disconnected;
-            client.Events.DataReceived += DataReceived;
-            try
-            {
-                client.Connect();
-                return true;
-            } catch (Exception ex)
-            {
-                client.Events.Connected -= Connected;
-                client.Events.Disconnected -= Disconnected;
-                client.Events.DataReceived -= DataReceived;
-                MessageBox.Show(ex.Message, "ไม่สามารถติดต่อกับเครื่อง Marking ได้");
-            }
-            return false;
+            Cmds = GetMarkingCmds(tbx_pattern_code.Text, blocks);
         }
         private void SendMarkingData()
         {
-            var msg = Enum.GetName(typeof(State), markingState);
-            string cmd = String.Empty;
-            var programNo = txProgramNo.Text;
-            string[] leftBlocks = { "000", "001", "002", "003", "004", "005", "006", "007", "008", "009" };
-            string[] rightBlocks = { "010", "011", "012", "013", "014", "015", "016", "017", "018", "019" };
-            var rows = dataGridView2.SelectedRows;
-            //
-            if (markingState.Equals(State.Initial)) //Initial State
+            if (Cmds.MoveNext())
             {
-                cmd = $"WX,ProgramNo={programNo}";
-                client.Send($"{cmd}{Environment.NewLine}");
-            }
-            else if (markingState.Equals(State.Programmed))    //Programmed
-            {
-                cmd = $"WX,PRG={programNo}";
-                if (cbSetLeft.Checked)
+                client.Send($"{Cmds.Current}{Environment.NewLine}");
+                Logger($"Request => {Cmds.Current}");
+            } else {
+                //1 set serials Mark Finished
+                if (Cmds.Current == "WX,StartMarking")
                 {
-                    cmd += $@",BLK={leftBlocks[1]},CharacterString={cbSetLeft.Text}";
-                    cmd += $@",BLK={leftBlocks[2]},CharacterString={txItemId.Text}";
-                    cmd += $@",BLK={leftBlocks[3]},CharacterString={txInventStyleId.Text.Trim()}";
-                    cmd += $@",BLK={leftBlocks[4]},CharacterString={txKBANumber.Text}";
+                    InsertMarkedAt();
+                    releaseAppLock(tbx_left_serial.Text, g_conn);
+                    if (tbx_right_serial.Text != string.Empty)
+                        releaseAppLock(tbx_right_serial.Text, g_conn);
                 }
-                if (cbSetRight.Checked)
-                {
-                    cmd += $",BLK={rightBlocks[1]},CharacterString={cbSetRight.Text}";
-                    cmd += $@",BLK={rightBlocks[2]},CharacterString={txItemId.Text}";
-                    cmd += $@",BLK={rightBlocks[3]},CharacterString={txInventStyleId.Text.Trim()}";
-                    cmd += $@",BLK={rightBlocks[4]},CharacterString={txKBANumber.Text}";
-                }
-                client.Send($"{cmd}{Environment.NewLine}");
+                this.Invoke(() => Procedures.Current.Enabled = false);
+                //Enable Print Button
+                if (Procedures.MoveNext())
+                    this.Invoke(() => Procedures.Current.Enabled = true);
             }
-            else if (markingState == State.Blocked)
-            {
-                /* *
-                 * ตัวอย่าง:รูปแบบการ Mark ข้างเดียว
-                 * WX,ProgNo=0001,BLK=006,MarkingEnable=0,111
-                 * => 0 = Off ทุก Block
-                 * => 111 = On ตั้งแต่ Block ที่ 6,7,8 
-                 * */
-                cmd = $"WX,PRG={programNo}";
-                if (cbSetLeft.Checked && cbSetRight.Checked)
-                    cmd += $",BLK=000,MarkingEnable=1,1111111111";
-                else if (cbSetLeft.Checked)
-                    cmd += $",BLK=000,MarkingEnable=0,11111";
-                else //(cbSetRight.Checked)
-                    cmd += $",BLK=011,MarkingEnable=0,11111";
-
-                client.Send($"{cmd}{Environment.NewLine}");
-            }
-            else if (markingState.Equals(State.OneOrTwoSide))
-            {
-                cmd = "WX,StartMarking";
-                client.Send($"{cmd}{Environment.NewLine}");
-            }
-            else if (markingState.Equals(State.Marked)) // Marked
-            {
-                //Print Warranty Card
-                cmd = "WX,Print Warranty Card";
-                btnStop_Click(null, null);
-            }
-            Logger($"{msg}=>{cmd}");
         }
-        private void SetMarkFinished(DataGridView dgv)
+        private IEnumerator<string> GetMarkingCmds(string pattern_code, string blocks)
         {
-            foreach(DataGridViewRow row in dgv.SelectedRows)
+            foreach(var cmd in new List<string>
             {
-                row.Cells["FINISHED_AT"].Value = DateTime.Now;
-            }
+                $"WX,ProgramNo={pattern_code}",
+                $"WX,PRG={pattern_code},{blocks}",
+//                $"WX,PRG={pattern_code},BLK=0001,MarkingEnable=1,11111111111111",
+                $"WX,StartMarking"
+            }) yield return cmd;
         }
-        private void InsertMarkedAt(DataGridView dgv)
+        private List<WarrantyCard> GetWarrantyCards()
+        {
+            List<WarrantyCard> cards = new List<WarrantyCard>();
+            var serials = WarrantyPdfFile.Split('.')[0].Replace('-',',');
+            var qrcode = CreateQrcode(serials);
+            var img = new Bitmap(qrcode);
+            var ms = new MemoryStream();
+            img.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            cards.Add(new WarrantyCard
+            {
+                product_code = txItemId.Text,
+                serial_numbers = serials,
+                qr_code = ms.ToArray()
+            });
+            return cards; 
+        }
+        private Bitmap CreateQrcode(String serial)
+        {
+            var WarrantyUrl = Properties.Settings.Default.WarrantyUrl;
+            var qrWriter = new BarcodeWriter { 
+                Format = BarcodeFormat.QR_CODE,
+                Options = new ZXing.Common.EncodingOptions
+                {
+                    Width = 130,
+                    Height = 130
+                }
+            };
+            return qrWriter.Write(WarrantyUrl + serial);
+        }
+        private void InsertMarkedAt()
         {
             using (SqlConnection conn = new SqlConnection(connString))
             {
                 conn.Open();
                 var cmd = conn.CreateCommand();
-                var id = "";
-                var sql = $@"INSERT INTO YSS_MARKING_FINISHED(MARKINGCODE_ID) VALUES ";
-                foreach (DataGridViewRow row in dgv.SelectedRows) {
-                    id = row.Cells["ID"].Value.ToString();
-                    sql += $"({id}), ";
-                }
-                cmd.CommandText = sql.Remove(sql.Length - 2, 2);
+                var sql = $@"INSERT INTO YSS_MARKING_FINISHED(MARKINGCODE_ID) VALUES ({tbx_left_serial.Tag})";
+                sql += tbx_right_serial.Tag.ToString() != string.Empty ? $",({tbx_right_serial.Tag})" : "";
+                cmd.CommandText = sql;
                 cmd.ExecuteNonQuery();
             }
-        }
-        private void PrintWarrantyCard()
-        {
-            // Nui: Implement
         }
         private Int32 InsertPrintedAt()
         {
@@ -330,6 +467,43 @@ namespace WarranteeForm
             }
 
         }
+        private void PrintWarrantyCard()
+        {
+            Directory.CreateDirectory(WarrantyCardsPath);
+            var pdfPath = $@"{WarrantyCardsPath}\{WarrantyPdfFile}";
+            ReportViewer reportViewer = new ReportViewer();
+            reportViewer.LocalReport.ReportPath = @"WarrantyCard.rdlc";
+            reportViewer.LocalReport.DataSources.Add(new ReportDataSource("WarrantyCardsDS", GetWarrantyCards()));
+            reportViewer.RefreshReport();
+            byte[] pdf = reportViewer.LocalReport.Render("PDF");
+            using(var fs = new FileStream(pdfPath, FileMode.OpenOrCreate,FileAccess.Write, FileShare.Write))
+            {
+                fs.Write(pdf, 0, pdf.Length);
+                fs.Flush();
+                fs.Close();
+            }
+        }
+        private void UpdateWarrantyCard(Int32 warranty_card_id)
+        {
+            using (SqlConnection conn = new SqlConnection(connString))
+            {
+                conn.Open();
+                var cmd = conn.CreateCommand();
+                foreach (var item in new List<TextBox>(){ tbx_left_serial, tbx_right_serial})
+                {
+                    var id = item.Tag.ToString();
+                    if (!string.IsNullOrEmpty(id))
+                    {
+                        cmd.CommandText = $@"
+
+                            UPDATE YSS_MARKING_FINISHED
+                            SET WARRANTY_CARD_ID = {warranty_card_id} 
+                            WHERE MARKINGCODE_ID = {id}";
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
         private void Logger(string msg)
         {
             new LogWriter(msg);
@@ -337,115 +511,147 @@ namespace WarranteeForm
         }
         private void ToggleButton(bool value)
         {
-            btnStart.Invoke(() => btnStart.Enabled = value);
-            btnStop.Invoke(() => btnStop.Enabled = value);
-            btnMarking.Invoke(() => btnMarking.Enabled = value);
             btnPrint.Invoke(() => btnPrint.Enabled = value);
+            btnMark.Invoke(() => btnMark.Enabled = value);
         }
-        private void UpdateWarrantyCard(DataGridView dgv, Int32 warranty_card_id)
+        private void PrintToPrinter(string filePath)
         {
-            using (SqlConnection conn = new SqlConnection(connString))
-            {
-                conn.Open();
-                var cmd = conn.CreateCommand();
-                var id = "";
-                foreach (DataGridViewRow row in dgv.SelectedRows)
-                {
-                    id = row.Cells["ID"].Value.ToString();
-                    cmd.CommandText = $@"
-                        UPDATE YSS_MARKING_FINISHED
-                        SET WARRANTY_CARD_ID = {warranty_card_id} 
-                        WHERE MARKINGCODE_ID = {id}";
-                   cmd.ExecuteNonQuery();
-                }
-            }
-        }
-        private void SetPrintFinished(DataGridView dgv, Int32 warranty_card_id)
-        {
-            using (SqlConnection conn = new SqlConnection(connString))
-            {
-                Int32? runnumber = null;
-                DateTime? printed_at = null; 
-                conn.Open();
-                var cmd = conn.CreateCommand();
-                cmd.CommandText = $@"SELECT ID, RUNNUMBER, PRINTED_AT 
-                    FROM YSS_WARRANTY_CARD 
-                    WHERE ID = {warranty_card_id}";
-                var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    runnumber = Convert.ToInt32(reader.GetValue(1));
-                    printed_at = reader.GetDateTime(2);
-                }
-                foreach (DataGridViewRow row in dgv.SelectedRows)
-                {
-                    row.Cells["RUNNUMBER"].Value = runnumber;
-                    row.Cells["PRINTED_AT"].Value = printed_at;
-                }
-            }
+            ProcessStartInfo processInfo = new ProcessStartInfo();
+            processInfo.FileName = @"powershell.exe";
+            processInfo.Arguments = @"& {Get-Content .\" + filePath + " | Out-Printer}";
+            processInfo.RedirectStandardError = true;
+            processInfo.RedirectStandardOutput = true;
+            processInfo.UseShellExecute = false;
+            processInfo.CreateNoWindow = true;
+            Process process = new Process();
+            process.StartInfo = processInfo;
+            process.Start();
         }
         #endregion
-        private void btnConnect_Click(object sender, EventArgs e)
-        {
-            
-            bool connected = ConnectMarkingMachine();
-            btnConnect.Enabled = !connected;
-            btnDisconnect.Enabled = connected;
-        }
-
-        private void btnDisconnect_Click(object sender, EventArgs e)
-        {
-            client.Disconnect();
-            btnConnect.Enabled = true;
-            btnDisconnect.Enabled = false;
-        }
-
-        private void btnStart_Click(object sender, EventArgs e)
-        {
-            markingState = State.Initial;
-            cbSetProgram.Checked = true;
-            //btnStop.Enabled = !(btnStart.Enabled = dataGridView1.Enabled = false);
-        }
 
         private void Form1_Load(object sender, EventArgs e)
         {
             this.Text += $" [Version: {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString()}]";
             var path = new System.Drawing.Drawing2D.GraphicsPath();
-            path.AddEllipse(0, 0, lbStatus.Width -4, lbStatus.Height -4);
+            path.AddEllipse(0, 0, lbStatus.Width - 4, lbStatus.Height - 4);
             lbStatus.Region = new Region(path);
             ToggleButton(false);
             markingState = State.StandBy;
             //
-            dataGridView1.ReadOnly = true;
-            dataGridView2.ReadOnly = true;
-            dataGridView1.RowPostPaint += dgv_RowPostPaint;
-            dataGridView2.RowPostPaint += dgv_RowPostPaint;
-            var departments = department_id == String.Empty ? "'6122','6123','6124','6125','6126'" : $"'{department_id}'";
-            GetDepartments(departments);
-            dataGridView1.SelectionChanged += dataGridView1_SelectionChanged;
-            dataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            cbDepartment.SelectedValueChanged += CbDepartment_SelectedValueChanged;
-            CbDepartment_SelectedValueChanged(cbDepartment, new EventArgs());
-            btnDisconnect.Enabled = false;
-            //btnStop.Enabled = false;
-            txProdId.Enabled = txItemId.Enabled = txItemName.Enabled = txItemSearchName.Enabled = txQty.Enabled = false;
-            txUnitId.Enabled = txProgramNo.Enabled = txKBANumber.Enabled = txInventStyleId.Enabled = false;
-            cbSetProgram.Enabled = cbSetBlock.Enabled = cbSetSide.Enabled = cbSetMark.Enabled = cbSetPrintCard.Enabled = false;
+            g_conn = new SqlConnection(connString);
+            g_conn.Open();
             //
-            cbSetProgram.CheckedChanged += StateChangedEvent;
-            cbSetBlock.CheckedChanged += StateChangedEvent;
-            cbSetSide.CheckedChanged += StateChangedEvent;
-            cbSetRight.MouseClick += OneSideChangedEvent;
-            cbSetMark.CheckedChanged += StateChangedEvent;
-            cbSetPrintCard.CheckedChanged += StateChangedEvent;
+            btnDisconnect.Enabled = false;
+            // production order info. always disabled
+            txItemId.Enabled = txItemName.Enabled = txQty.Enabled = false;
+            txUnitId.Enabled = txKBANumber.Enabled = txInventStyleId.Enabled = false;
+            tbx_serial_from.Enabled = tbx_serial_to.Enabled = tbx_region.Enabled = false;
+            tbx_left_serial.Enabled = tbx_right_serial.Enabled = false;
+            cbx_kba_use.Enabled = false;
+            cbx_abe_active.Enabled = false;
+            // pattern code always disabled
+            tbx_pattern_code.Enabled = false;
+            //
+            btnPrint.Enabled = false;
+            //
+            tbHost.Text = Properties.Settings.Default.Ip;
+            tbPort.Text = Properties.Settings.Default.Port;
+            //
+            pictureBox1.LoadCompleted += PictureBox1_LoadCompleted;
             //
             btnConnect_Click(null, null);
+            GetDepartments();
+            cbDepartment_SelectedValueChanged(cbDepartment, null);
+            cbProductionOrder_SelectedIndexChanged(cbx_production_order, null);
+            cbDepartment.SelectedValueChanged += cbDepartment_SelectedValueChanged;
+            cbx_production_order.SelectedIndexChanged += cbProductionOrder_SelectedIndexChanged;
+            //
         }
 
-        private void dgv2_SelectionChanged(object sender, EventArgs e)
+        private void btnConnect_Click(object sender, EventArgs e)
         {
-            var dgv = sender as DataGridView;
-            MessageBox.Show(e.ToString());
+            bool connected = ConnectMarkingMachine();
+            btnConnect.Enabled = !connected;
+            btnDisconnect.Enabled = connected;
+            ToggleButton(connected);
+        }
+        private void btnDisconnect_Click(object sender, EventArgs e)
+        {
+            client.Disconnect();
+            btnConnect.Enabled = true;
+            btnDisconnect.Enabled = false;
+            ToggleButton(false);
+        }
+        private void btnMark_Click(object sender, EventArgs e)
+            => Marking();
+        private void btnPrint_Click(object sender, EventArgs e)
+        {
+            var id = InsertPrintedAt();
+            Procedures.Current.Enabled = false;
+            PrintWarrantyCard();
+            PrintToPrinter(WarrantyPdfFile);
+            UpdateWarrantyCard(id);
+            //
+            dynamic order = new ExpandoObject();
+            order.prodId = cbx_production_order.Text;
+            order.qty = txQty.Text.Split('/')[1];
+            order.unitId = txUnitId.Text;
+            order.activeAbe = cbx_abe_active.Checked;
+            order.region = tbx_region.Text;
+            GetMarkingInfo(order);
+            ShowMarkingInfo(order);
+            if (order.marked < Int16.Parse(order.qty))
+            {
+                Procedures = CreateProcedures();
+                Procedures.MoveNext();
+                Procedures.Current.Enabled = true;
+            }
+            else
+            {
+                MessageBox.Show("Finished !!!");
+            }
+        }
+        private void btnRefreshPd_Click(object sender, EventArgs e)
+        {
+            cbDepartment_SelectedValueChanged(cbDepartment, null);
+        }
+
+        private void cbDepartment_SelectedValueChanged(object sender, EventArgs e)
+        {
+            var cb = sender as ComboBox;
+            var departmentid = cb.SelectedValue.ToString();
+            GetProductionOrders(departmentid);
+        }
+        private void cbProductionOrder_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            var prod_id = (sender as ComboBox).SelectedValue.ToString();
+            var order = GetProductionOrder(prod_id);
+            ShowProductionInfo(order);
+            order = GetMarkingInfo(order);
+            ShowMarkingInfo(order);
+            if (order.marked < Int16.Parse(order.qty))
+            {
+                GetPatternCode(order.prodId, order.itemId);
+                Procedures = CreateProcedures();
+                Procedures.MoveNext();
+                Procedures.Current.Enabled = true;
+            } else
+            {
+                MessageBox.Show("Finished !!!");
+            }
+        }
+
+        private void PictureBox1_LoadCompleted(object sender, System.ComponentModel.AsyncCompletedEventArgs e)
+        {
+            if (e.Error != null)
+            {
+                PictureBox pic = (PictureBox)sender;
+                var image = new Bitmap(pic.Width, pic.Height);
+                var font = new Font("Tahoma", 16, FontStyle.Bold, GraphicsUnit.Pixel);
+                var graphics = Graphics.FromImage(image);
+                graphics.DrawString(e.Error.Message, font, Brushes.Red, new Point(0,pic.Height/2));
+                pic.Image = image;
+            }
         }
 
         private void StateChangedEvent(object sender, EventArgs e)
@@ -453,65 +659,30 @@ namespace WarranteeForm
             if (markingState != State.StandBy)
                 SendMarkingData();
         }
-
         private void OneSideChangedEvent(object sender, EventArgs e)
         {
             var cb = sender as CheckBox;
             if (cb.Checked == false)
-            {
                 cb.Text = string.Empty;
-                dataGridView2.Rows[markedIndex--].Selected = false;
-            } else
-            {
-                dataGridView2.Rows[++markedIndex].Selected = true;
-                cb.Text = dataGridView2.Rows[markedIndex].Cells["MARKINGCODE"].Value.ToString();
-            }
         }
-
-        private void DataReceived(object sender, DataReceivedEventArgs e)
+        private void DataReceived(object sender, SimpleTcp.DataReceivedEventArgs e)
         {
             string data = Encoding.UTF8.GetString(e.Data);
-            var msg = String.Empty;
             if (data.Contains(WXOK))
             {
-                switch (markingState)
-                {
-                    case State.Initial:
-                        markingState = State.Programmed;
-                        cbSetBlock.Invoke(() => cbSetBlock.Checked = true);
-                        break;
-                    case State.Programmed:
-                        markingState = State.Blocked;
-                        cbSetSide.Invoke(() => cbSetSide.Checked = true);
-                        break;
-                    case State.Blocked:
-                        markingState = State.OneOrTwoSide;
-                        cbSetMark.Invoke(() => cbSetMark.Checked = true);
-                        break;
-                    case State.OneOrTwoSide:
-                        markingState = State.Marked;
-                        cbSetPrintCard.Invoke(() => cbSetPrintCard.Checked = true);
-                        break;
-                    case State.Marked:
-                        markingState = State.Printed;
-                        break;
-                    case State.Printed:
-                        markingState = State.Programmed;
-                        break;
-                }
+                Logger(data);
+                SendMarkingData();
             }
             else if (data.Contains(WXNG))
             {
-                msg = $"Error: {data} State: {Enum.GetName(typeof(State),markingState)}";
-                Logger(msg);
+                Logger($"Error: {data} State: {Enum.GetName(typeof(State), markingState)}");
             }
         }
-
         private void Disconnected(object sender, ClientDisconnectedEventArgs e)
         {
             lbStatus.Invoke(() =>
             {
-                lbStatus.Text = $"Disconnected: {String.Format("{0:MMM-dd hh:mm:ss}",DateTime.Now)}";
+                lbStatus.Text = $"Disconnected: {String.Format("{0:MMM-dd hh:mm:ss}", DateTime.Now)}";
                 lbStatus.BackColor = Color.Red;
             });
             client.Events.Connected -= Connected;
@@ -520,7 +691,6 @@ namespace WarranteeForm
             ToggleButton(false);
             new LogWriter("Disconnected.");
         }
-
         private void Connected(object sender, ClientConnectedEventArgs e)
         {
             lbStatus.Invoke(() =>
@@ -528,213 +698,7 @@ namespace WarranteeForm
                 lbStatus.Text = $"Connected: {String.Format("{0:MMM-dd hh:mm:ss}", DateTime.Now)}";
                 lbStatus.BackColor = Color.Green;
             });
-            ToggleButton(true);
             new LogWriter("Connected.");
-        }
-
-        private void CbDepartment_SelectedValueChanged(object sender, EventArgs e)
-        {
-            var cb = sender as ComboBox;
-            var departmentid = cb.SelectedValue.ToString();
-            GetProductionOrders(departmentid);
-            var bs = dataGridView1.DataSource as BindingSource;
-            if (bs.Count > 0) bs.Position = 0;
-            dataGridView1_SelectionChanged(dataGridView1, new EventArgs());
-        }
-
-        private void dataGridView1_SelectionChanged(object sender, EventArgs e)
-        {
-            var dgv = sender as DataGridView;
-            if (dgv.SelectedRows.Count > 0)
-            {
-                GetProductionOrder();
-                SelectUnmarkSerial(dataGridView2);
-                ShowItemDetails();
-            }
-            else
-            {
-                dataGridView2.DataSource = null;
-                txProdId.Text = txItemId.Text = txItemName.Text = txQty.Text = txUnitId.Text = "";
-            }
-        }
-
-        private void dgv_RowPostPaint(object sender, DataGridViewRowPostPaintEventArgs e)
-        {
-            var dv = sender as DataGridView;
-            var rowIdx = (e.RowIndex + 1).ToString();
-
-            var centerFormat = new StringFormat()
-            {
-                // right alignment might actually make more sense for numbers
-                Alignment = StringAlignment.Center,
-                LineAlignment = StringAlignment.Center
-            };
-
-            var headerBounds = new Rectangle(e.RowBounds.Left, e.RowBounds.Top, dv.RowHeadersWidth, e.RowBounds.Height);
-            e.Graphics.DrawString(rowIdx, this.Font, SystemBrushes.ControlText, headerBounds, centerFormat);
-        }
-
-        private void btnStop_Click(object sender, EventArgs e)
-        {
-            SetMarkFinished(dataGridView2);
-            InsertMarkedAt(dataGridView2);
-            markingState = State.StandBy;
-            dataGridView2.ClearSelection();
-            cbSetLeft.Text = cbSetRight.Text = string.Empty;
-            cbSetProgram.Checked = cbSetBlock.Checked = cbSetSide.Checked = cbSetMark.Checked = cbSetPrintCard.Checked = false;
-            if (markedIndex < dataGridView2.Rows.Count - 1)
-            {
-                SelectUnmarkSerial(dataGridView2);
-                ShowItemDetails();
-            }
-            //btnStop.Enabled = !(btnStart.Enabled = dataGridView1.Enabled = true);
-        }
-
-        private void btnPrint_Click(object sender, EventArgs e)
-        {
-            var id = InsertPrintedAt();
-            
-            Print_Warranty();
-            UpdateWarrantyCard(dataGridView2, id);
-            SetPrintFinished(dataGridView2, id);
-
-        }
-
-
-        public static void CreateQrcode(String SerialCode1, String SerialCode2)
-        {
-            string Serialwar;
-
-            if (SerialCode2 == "")
-            {
-                Serialwar = SerialCode1;
-            }
-            else
-            {
-                Serialwar = SerialCode1 + ',' + SerialCode2;
-            }
-            var url = string.Format("http://chart.apis.google.com/chart?cht=qr&chs={1}x{2}&chl={0}", "www.yss.co.th/warranty.php?serial=" + Serialwar, 200, 200);
-            System.Net.WebResponse response = default(System.Net.WebResponse);
-            Stream remoteStream = default(Stream);
-            StreamReader readStream = default(StreamReader);
-            System.Net.WebRequest request = System.Net.WebRequest.Create(url);
-
-            response = request.GetResponse();
-            remoteStream = response.GetResponseStream();
-            readStream = new StreamReader(remoteStream);
-            System.Drawing.Image img = System.Drawing.Image.FromStream(remoteStream);
-            //img.Save("D:/QRCode/123456" + txtCode.Text + ".png");
-            img.Save("D:/QRCode/" + SerialCode1 + ".png");
-            response.Close();
-            remoteStream.Close();
-            readStream.Close();
-        }
-
-        private void Print_Warranty()
-        {
-            int i = 0, j=0;
-            if (txUnitId.Text == "PAIR")
-            {
-                i = 1;
-                CreateQrcode(cbSetLeft.Text, cbSetRight.Text);
-            }
-            else
-            {
-                if(cbSetRight.Text == "")
-                {
-                    i = 1;
-                    CreateQrcode(cbSetLeft.Text, "");
-                }
-                else
-                {
-                    i = 2;
-                    CreateQrcode(cbSetLeft.Text, "");
-                    CreateQrcode(cbSetRight.Text, "");
-                }
-            }
-            
-            for (j = 0; j <= i;j++);
-            {               
-
-                Document doc = new Document(PageSize.A5.Rotate());
-
-                BaseFont arial = BaseFont.CreateFont(BaseFont.TIMES_ROMAN, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
-                iTextSharp.text.Font f_15_Bold = new iTextSharp.text.Font(arial, 15, iTextSharp.text.Font.BOLD);
-                iTextSharp.text.Font f_12_Narmal = new iTextSharp.text.Font(arial, 12, iTextSharp.text.Font.NORMAL);
-
-                Random rnd = new Random();
-                int name = rnd.Next(1, 1000);
-                FileStream os = new FileStream("OUTPUT.pdf", FileMode.Create);
-
-                using (os)
-                {
-                    PdfWriter.GetInstance(doc, os);
-                    doc.Open();
-
-                    //Information about company
-                    PdfPTable table1 = new PdfPTable(1);
-                    float[] width = new float[] { 40f, 60f };
-
-                    System.Drawing.Image pImage = System.Drawing.Image.FromFile("D:\\QRcode\\B1304148.png");
-                    iTextSharp.text.Image ItextImage = iTextSharp.text.Image.GetInstance(pImage, System.Drawing.Imaging.ImageFormat.Png);
-                    ItextImage.Alignment = Element.ALIGN_BOTTOM;
-                    ItextImage.WidthPercentage = 10;
-
-
-
-
-                    PdfPCell cel1 = new PdfPCell(new Phrase("\n " + cbSetLeft.Text, f_12_Narmal));
-                    PdfPCell cel2 = new PdfPCell(new Phrase("\n " + cbSetRight.Text, f_12_Narmal));
-                    PdfPCell cel3 = new PdfPCell(new Phrase("\n " + txItemId.Text, f_12_Narmal));
-
-
-                    cel1.Border = iTextSharp.text.Rectangle.NO_BORDER;
-                    cel2.Border = iTextSharp.text.Rectangle.NO_BORDER;
-                    cel3.Border = iTextSharp.text.Rectangle.NO_BORDER;
-
-
-                    cel1.HorizontalAlignment = Element.ALIGN_JUSTIFIED;
-                    cel2.HorizontalAlignment = Element.ALIGN_JUSTIFIED;
-                    cel3.HorizontalAlignment = Element.ALIGN_JUSTIFIED;
-
-                    table1.WidthPercentage = 40;
-                    table1.HorizontalAlignment = Element.ALIGN_LEFT;
-                    table1.AddCell(cel1);
-                    table1.AddCell(cel2);
-                    table1.AddCell(cel3);
-
-                    //doc.Add(ItextImage);
-
-                    table1.SpacingAfter = 20;
-                    table1.SpacingBefore = 10;
-
-
-                    PdfPTable table2 = new PdfPTable(1);
-                    table2.AddCell(ItextImage);
-                    table2.WidthPercentage = 30;
-                    table2.HorizontalAlignment = Element.ALIGN_RIGHT;
-
-                    doc.Add(table1);
-                    doc.Add(table2);
-
-
-                    doc.Close();
-                    //Open document 
-                    //System.Diagnostics.Process.Start(@"OUTPUT.pdf");
-
-                    var pi = new System.Diagnostics.ProcessStartInfo(@"OUTPUT.pdf");//"D:\\OUTPUT.pdf");
-                    pi.UseShellExecute = true;
-                    pi.Verb = "print";
-                    var process = System.Diagnostics.Process.Start(pi);
-                }
-           }
-        }
-
-        private void btnMarking_Click(object sender, EventArgs e)
-        {
-            string cmd = "WX,StartMarking";
-            client.Send($"{cmd}{Environment.NewLine}");
-            listBox1.Items.Add(cmd);
         }
 
     }

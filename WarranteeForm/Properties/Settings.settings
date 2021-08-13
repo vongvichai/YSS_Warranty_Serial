@@ -8,5 +8,20 @@
     <Setting Name="Department" Type="System.String" Scope="Application">
       <Value Profile="(Default)">6124</Value>
     </Setting>
+    <Setting Name="Departments" Type="System.String" Scope="Application">
+      <Value Profile="(Default)">'6122','6123','6124','6125','6126'</Value>
+    </Setting>
+    <Setting Name="WarrantyUrl" Type="System.String" Scope="Application">
+      <Value Profile="(Default)">www.yss.co.th/warranty.php?serial=</Value>
+    </Setting>
+    <Setting Name="Ip" Type="System.String" Scope="Application">
+      <Value Profile="(Default)">169.254.235.60</Value>
+    </Setting>
+    <Setting Name="Port" Type="System.String" Scope="Application">
+      <Value Profile="(Default)">50000</Value>
+    </Setting>
+    <Setting Name="ImagePath" Type="System.String" Scope="Application">
+      <Value Profile="(Default)">file://192.168.0.89/pictureax/Picture Laser/</Value>
+    </Setting>
   </Settings>
 </SettingsFile>

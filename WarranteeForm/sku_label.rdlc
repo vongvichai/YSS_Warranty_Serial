@@ -1,0 +1,576 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Report MustUnderstand="df" xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner" xmlns:df="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition/defaultfontfamily">
+  <df:DefaultFontFamily>Segoe UI</df:DefaultFontFamily>
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="DataSource1">
+      <DataSourceReference>/Data Source/YSS_K2_TEST</DataSourceReference>
+      <rd:SecurityType>None</rd:SecurityType>
+      <rd:DataSourceID>001499a8-c4de-46f4-a970-cec3ca2a742b</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="DataSet1">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@ItemID">
+            <Value>=Parameters!ItemID.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@Customer">
+            <Value>=Parameters!customer.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@Qty">
+            <Value>=Parameters!Qty.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@Batch">
+            <Value>=Parameters!Batch.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>USE YSS_DBLINK
+DECLARE @cnt INT = 0
+Declare @cnt_total INT = 0
+Declare @BaseQty int
+Declare @UNITID  nvarchar(15)
+Declare @ITEMBARCODE nvarchar(20)
+Declare @PRODUCTCATEGORYNAME nvarchar(50)
+Declare @PRODUCTNAME nvarchar(Max)
+Declare @QRCODE nvarchar(20)
+Declare @ItemColor nvarchar(20)
+DECLARE @CHKITEMNEW VARCHAR(30)
+DECLARE @CHKITEMOLD VARCHAR(30)
+DECLARE @ItemID_RUN VARCHAR(30)
+DECLARE @ItemID_PROX VARCHAR(30)
+Declare @Price float
+Declare @ExternalItem VARCHAR(MAX)
+
+/*
+Declare @ItemID VARCHAR(30) = 'I1358-01-X'
+Declare @Batch VARCHAR(30) = '210219-1'
+Declare @Qty int = 10
+Declare @customer VARCHAR(30) = 'C000012'
+*/
+
+Exec Yss_Get_ItemBarcode @ItemID
+
+set @ItemID_PROX = ''
+
+CREATE TABLE [dbo].[#YSS_STICKER_BARCODE](
+	[ItemID] [nvarchar](30) NULL,
+	[PRODUCTCATEGORYNAME] [nvarchar](50) NULL,
+	[ItemColor] [nvarchar](20) NULL,
+	[PRODUCTNAME] [nvarchar](Max) NULL,
+	[ITEMBARCODE] [nvarchar](20) NULL,
+	[QRCODE] [nvarchar](20) NULL,
+	[Qty] [int] NULL,
+	[Price] [float] NULL,
+	[UnitID] [nvarchar](20) NULL,
+	[Batch] [nvarchar](20) NULL	
+)
+
+SET @CHKITEMNEW = ISNULL((SELECT TOP 1 ITEMID FROM YSS_PRODUCT_DETAILS WHERE ITEMID = @ItemID),'')
+SET @CHKITEMOLD = ISNULL((SELECT TOP 1 ITEMD365 FROM [YSS-AX-DB].[YSS_TEST].[DBO].[YSSMAPINGITEMD365] WHERE ITEMID = @ItemID),'')
+
+if(@CHKITEMNEW = '')
+BEGIN
+	SET @ItemID_RUN = @CHKITEMOLD;
+END
+ELSE
+BEGIN
+	SET @ItemID_RUN = @CHKITEMNEW;
+END
+  
+  Select @ItemID_PROX = PRODUCTNUMBER from [YSS_DBLINK].[dbo].[YSS_VIEW_PRODUCT_CATEGORY] where [PRODUCTCATEGORY] = 'PRO-X' and PRODUCTNUMBER = @ItemID_RUN
+  if(@ItemID_PROX &lt;&gt; '')
+  begin
+	select @PRODUCTNAME = SEARCHNAME,@ItemColor = (Select name from YSS_PRODUCT_COLOR where COLOR COLLATE Latin1_General_CI_AS =  PROPERTYID),@UNITID = BOMUNITID FROM YSS_BYOD.DBO.YSSProductDetailStaging where ITEMID = @ItemID_RUN
+
+	if(@Customer &lt;&gt; 'C000012') 
+	Begin
+	  SELECT @ExternalItem = ExternalItemTxt FROM YSS_PRODUCT_EXTERNAL WHERE CustVendRelation = @Customer and ItemId = @ItemID_RUN
+	end
+	if(@ExternalItem &lt;&gt; '')
+	begin
+	  Set @PRODUCTNAME = @ExternalItem
+	end
+	--select @PRODUCTNAME= PRODUCTSEARCHNAME,@ItemColor = Color,@UNITID = BOMUNITID from YSS_PRODUCT_DETAILS where ITEMID = @ItemID_RUN
+
+	--select @PRODUCTNAME= PRODUCTSEARCHNAME,@ItemColor = Color,@UNITID = BOMUNITID from YSS_PRODUCT_DETAILS where ITEMID = @ItemID_RUN
+	SELECT @PRODUCTCATEGORYNAME = PRODUCTCATEGORYNAME FROM [YSS_BYOD].[dbo].[EcoResProductCategoryAssignmentStaging] WHERE (PRODUCTNUMBER = @ItemID_RUN) AND (PRODUCTCATEGORYHIERARCHYNAME = 'LABEL CATEGORIES')
+	Select @Price = price from Yss_Temp_price where itemid = @ItemID_RUN
+
+
+		select Distinct @ITEMBARCODE = ITEMBARCODE,@BaseQty = Quantity from YSS_Temp_ITEMBARCODE where ITEMID = @ItemID_RUN and left(ITEMBARCODE,3) = '885' and Quantity = @Qty order by Quantity Desc
+
+	
+		select Distinct @QRCODE = ITEMBARCODE,@BaseQty = Quantity from YSS_Temp_ITEMBARCODE where ITEMID = @ItemID_RUN and left(ITEMBARCODE,3) &lt;&gt; '885' and Quantity = @Qty and BatchID = @Batch  order by Quantity Desc
+
+			   if(@QRCODE &lt;&gt; '')
+			   Begin 
+			 insert into #YSS_STICKER_BARCODE (ItemID,PRODUCTCATEGORYNAME,ItemColor,PRODUCTNAME,ITEMBARCODE,QRCODE,Qty,Price,UnitID,Batch) Values
+			(@ItemID_RUN,@PRODUCTCATEGORYNAME,@ItemColor,@PRODUCTNAME,@ITEMBARCODE,@QRCODE,@BaseQty,@Price,@UNITID,@Batch)
+			   end
+          
+    end
+	select * from #YSS_STICKER_BARCODE
+drop TABLE #YSS_STICKER_BARCODE</CommandText>
+        <rd:UseGenericDesigner>true</rd:UseGenericDesigner>
+      </Query>
+      <Fields>
+        <Field Name="ItemID">
+          <DataField>ItemID</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="PRODUCTCATEGORYNAME">
+          <DataField>PRODUCTCATEGORYNAME</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="ItemColor">
+          <DataField>ItemColor</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="PRODUCTNAME">
+          <DataField>PRODUCTNAME</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="ITEMBARCODE">
+          <DataField>ITEMBARCODE</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="QRCODE">
+          <DataField>QRCODE</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Qty">
+          <DataField>Qty</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="Price">
+          <DataField>Price</DataField>
+          <rd:TypeName>System.Double</rd:TypeName>
+        </Field>
+        <Field Name="UnitID">
+          <DataField>UnitID</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Batch">
+          <DataField>Batch</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportSections>
+    <ReportSection>
+      <Body>
+        <ReportItems>
+          <Textbox Name="Textbox3">
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=First(Fields!PRODUCTCATEGORYNAME.Value, "DataSet1")</Value>
+                    <Style>
+                      <FontSize>12pt</FontSize>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox3</rd:DefaultName>
+            <Left>0.0635cm</Left>
+            <Height>0.6cm</Height>
+            <Width>6.81504cm</Width>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox4">
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=First(Fields!ItemID.Value, "DataSet1")</Value>
+                    <Style>
+                      <FontSize>11pt</FontSize>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox4</rd:DefaultName>
+            <Top>0.51886cm</Top>
+            <Left>0.03175cm</Left>
+            <Height>0.6cm</Height>
+            <Width>4.37854cm</Width>
+            <ZIndex>1</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox5">
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="Qty:"+ str(Fields!Qty.Value) + First(Fields!UnitID.Value, "DataSet1")</Value>
+                    <Style>
+                      <FontFamily>Tahoma</FontFamily>
+                      <FontSize>7pt</FontSize>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style>
+                  <TextAlign>Right</TextAlign>
+                </Style>
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox5</rd:DefaultName>
+            <Top>0.58236cm</Top>
+            <Left>4.37854cm</Left>
+            <Height>0.6cm</Height>
+            <Width>2.5cm</Width>
+            <ZIndex>2</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox6">
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=First(Fields!ItemColor.Value, "DataSet1")</Value>
+                    <Style>
+                      <FontFamily>Tahoma</FontFamily>
+                      <FontSize>11pt</FontSize>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox6</rd:DefaultName>
+            <Top>1.03772cm</Top>
+            <Left>0.03175cm</Left>
+            <Height>0.6cm</Height>
+            <Width>5.675cm</Width>
+            <ZIndex>3</ZIndex>
+            <Style>
+              <Border />
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox7">
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=First(Fields!PRODUCTNAME.Value, "DataSet1")</Value>
+                    <Style />
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox7</rd:DefaultName>
+            <Top>1.62008cm</Top>
+            <Left>0.03175cm</Left>
+            <Height>1.00569cm</Height>
+            <Width>6.87854cm</Width>
+            <ZIndex>4</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox9">
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="*" + First(Fields!ITEMBARCODE.Value, "DataSet1") + "*"</Value>
+                    <Style>
+                      <FontFamily>Free 3 of 9 Extended</FontFamily>
+                      <FontSize>24pt</FontSize>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox9</rd:DefaultName>
+            <Top>3.11891cm</Top>
+            <Left>0.03175cm</Left>
+            <Height>0.73229cm</Height>
+            <Width>5.50389cm</Width>
+            <ZIndex>5</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox10">
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="*" + First(Fields!ITEMBARCODE.Value, "DataSet1") + "*"</Value>
+                    <Style>
+                      <FontFamily>Tahoma</FontFamily>
+                      <FontSize>7pt</FontSize>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox10</rd:DefaultName>
+            <Top>3.82298cm</Top>
+            <Left>0.03175cm</Left>
+            <Height>0.38833cm</Height>
+            <Width>2.5cm</Width>
+            <ZIndex>6</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox11">
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="Batch:" + First(Fields!Batch.Value, "DataSet1")</Value>
+                    <Style>
+                      <FontFamily>Tahoma</FontFamily>
+                      <FontSize>5pt</FontSize>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox11</rd:DefaultName>
+            <Top>4.34184cm</Top>
+            <Height>0.54708cm</Height>
+            <Width>1.49106cm</Width>
+            <ZIndex>7</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox12">
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="*" + Parameters!Batch.Value + "*"</Value>
+                    <Style>
+                      <FontFamily>Free 3 of 9 Extended</FontFamily>
+                      <FontSize>20pt</FontSize>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox12</rd:DefaultName>
+            <Top>4.17956cm</Top>
+            <Left>1.66744cm</Left>
+            <Height>0.58236cm</Height>
+            <Width>3.53893cm</Width>
+            <ZIndex>8</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox13">
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="Inventory status: " &amp; Parameters!InventoryStatus.Value</Value>
+                    <Style>
+                      <FontFamily>Tahoma</FontFamily>
+                      <FontSize>6pt</FontSize>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style>
+                  <TextAlign>Right</TextAlign>
+                </Style>
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox13</rd:DefaultName>
+            <Top>3.81945cm</Top>
+            <Left>2.57761cm</Left>
+            <Height>0.39186cm</Height>
+            <Width>2.93333cm</Width>
+            <ZIndex>9</ZIndex>
+            <Style>
+              <Border />
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Image Name="Image1">
+            <Source>External</Source>
+            <Value>="https://qrcode.kaywa.com/img.php?s=8&amp;d=" + Fields!QRCODE.Value</Value>
+            <Sizing>FitProportional</Sizing>
+            <Top>3.10155cm</Top>
+            <Left>5.61325cm</Left>
+            <Height>1.3cm</Height>
+            <Width>1.3cm</Width>
+            <ZIndex>10</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Image>
+        </ReportItems>
+        <Height>50.61875mm</Height>
+        <Style>
+          <Border>
+            <Style>None</Style>
+          </Border>
+        </Style>
+      </Body>
+      <Width>70mm</Width>
+      <Page>
+        <PageHeight>5.3cm</PageHeight>
+        <PageWidth>7cm</PageWidth>
+        <ColumnSpacing>0.13cm</ColumnSpacing>
+        <Style />
+      </Page>
+    </ReportSection>
+  </ReportSections>
+  <ReportParameters>
+    <ReportParameter Name="ItemID">
+      <DataType>String</DataType>
+      <Prompt>Item ID</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="Qty">
+      <DataType>String</DataType>
+      <Prompt>Qty</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="Batch">
+      <DataType>String</DataType>
+      <Prompt>Batch</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="InventoryStatus">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>0000</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>InventoryStatus</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="customer">
+      <DataType>String</DataType>
+      <Prompt>Customer</Prompt>
+    </ReportParameter>
+  </ReportParameters>
+  <ReportParametersLayout>
+    <GridLayoutDefinition>
+      <NumberOfColumns>4</NumberOfColumns>
+      <NumberOfRows>2</NumberOfRows>
+      <CellDefinitions>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>ItemID</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>1</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>Qty</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>2</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>Batch</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>3</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>InventoryStatus</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>1</RowIndex>
+          <ParameterName>customer</ParameterName>
+        </CellDefinition>
+      </CellDefinitions>
+    </GridLayoutDefinition>
+  </ReportParametersLayout>
+  <rd:ReportUnitType>Cm</rd:ReportUnitType>
+  <rd:ReportServerUrl>http://yss-k2-db/ReportServer</rd:ReportServerUrl>
+  <rd:ReportID>6231d1e6-eba6-44db-9395-8b3701cb443a</rd:ReportID>
+</Report>
